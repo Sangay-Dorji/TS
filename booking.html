@@ -23,6 +23,11 @@
   #msg { display:none; padding:14px; border-radius:8px; margin-top:14px; font-weight:600; }
   #msg.ok { display:block; background:var(--ok); color:#fff; } #msg.bad { display:block; background:var(--bad); color:#fff; }
   .hp { position:absolute; left:-9999px; }
+  .qrbox { text-align:center; margin:14px 0 4px; }
+  .qrbox img { width:100%; max-width:260px; height:auto; border:1px solid var(--line); border-radius:10px; background:#fff; padding:8px; }
+  .qrbox .cap { font-size:14px; opacity:.8; margin-top:6px; }
+  .qrbox a { color:var(--accent); font-weight:600; }
+  .amount { font-size:20px; font-weight:700; margin-top:10px; }
 </style>
 </head>
 <body>
@@ -33,16 +38,21 @@
   <div class="card pay">
     <h2>How to pay</h2>
     <!-- EDIT: replace with your real payment details -->
-    <div>1. Pay the total shown below to: <b>ACCOUNT NAME / NUMBER / BANK</b><br>
+    <div>1. Scan the QR code below with your banking app and pay <b>exactly the amount shown</b>.<br>
     2. Copy the <b>transaction / journal number</b> from your payment confirmation.<br>
     3. Fill in the form below with that number.<br>
     Your tickets are emailed after we verify the payment.</div>
+    <div class="amount">Amount to pay: <span id="payTotal"></span></div>
+    <div class="qrbox" id="qrbox">
+      <img src="bank-qr.png" alt="Bank payment QR code" onerror="document.getElementById('qrbox').style.display='none'">
+      <div class="cap">On a phone? <a href="bank-qr.png" download="payment-qr.png">Save the QR image</a>, then choose it from your gallery in your banking app if it supports that.</div>
+    </div>
   </div>
 
   <form class="card" id="f" autocomplete="on">
     <label for="name">Full name</label><input id="name" required>
-    <label for="email">Email (tickets are sent here)</label>
-    <input id="email" type="email" required>    <label for="phone">Phone</label><input id="phone" type="tel">
+    <label for="email">Email (tickets are sent here)</label><input id="email" type="email" required>
+    <label for="phone">Phone</label><input id="phone" type="tel">
     <label for="qty">Number of tickets</label><select id="qty"></select>
     <div class="total">Total: <span id="total"></span></div>
     <label for="ref">Payment transaction / journal number</label><input id="ref" required>
@@ -54,19 +64,20 @@
 
 <script>
   // >>> EDIT THESE THREE LINES <<<
-  const API_URL = 'https://script.google.com/macros/s/AKfycbwMwad85YYJgx0Z9EdqksojyUnmuIyOkBGH12UvyPNNOcUf3Ivklbf0io1POojRvYYGxA/exec';   // same /exec URL as the scanner
+  const API_URL = 'https://script.google.com/macros/s/AKfycbwMwad85YYJgx0Z9EdqksojyUnmuIyOkBGH12UvyPNNOcUf3Ivklbf0io1POojRvYYGxA/exec';
   const PRICE = 800, CURRENCY = 'Nu.';
   const MAX = 10;
 
   const $ = id => document.getElementById(id);
   for (let i = 1; i <= MAX; i++) $('qty').add(new Option(i, i));
-  const upd = () => $('total').textContent = CURRENCY + ' ' + (PRICE * $('qty').value).toLocaleString();
+  const upd = () => { const t = CURRENCY + ' ' + (PRICE * $('qty').value).toLocaleString(); $('total').textContent = t; $('payTotal').textContent = t; };
   $('qty').addEventListener('change', upd); upd();
 
   function say(kind, text) { $('msg').className = kind; $('msg').textContent = text; }
 
   $('f').addEventListener('submit', async e => {
     e.preventDefault();
+    $('btn').disabled = true; say('', '');
     try {
       const q = new URLSearchParams({ action: 'book', name: $('name').value, email: $('email').value, phone: $('phone').value,
         qty: $('qty').value, ref: $('ref').value, website: $('website').value });
