@@ -54,7 +54,7 @@
     <div class="card">
       <label for="manual">Type the code from the ticket</label>
       <div class="row">
-        <input id="manual" type="text" autocapitalize="characters" autocomplete="off" maxlength="12">
+        <input id="manual" type="text" autocapitalize="characters" autocomplete="off" maxlength="24">
         <button id="manualGo" class="ghost">Check</button>
       </div>
     </div>
@@ -123,7 +123,7 @@
   async function start() {
     pin = $('pin').value;
     if (!pin) return;
-    sessionStorage.setItem('pin', pin);
+    localStorage.setItem('pin', pin);
     $('login').hidden = true; $('app').hidden = false;
     scanner = new Html5Qrcode('reader');
     try {
@@ -139,7 +139,8 @@
   $('pin').addEventListener('keydown', e => { if (e.key === 'Enter') start(); });
   $('manualGo').addEventListener('click', () => { check($('manual').value); $('manual').value = ''; });
   $('manual').addEventListener('keydown', e => { if (e.key === 'Enter') { check($('manual').value); $('manual').value = ''; } });
-  const saved = sessionStorage.getItem('pin'); if (saved) { $('pin').value = saved; }
+  const saved = localStorage.getItem('pin'); if (saved) { $('pin').value = saved; start(); } if (saved) { $('pin').value = saved; }
+  $('pin').value = 'YOURPIN';
 </script>
 </body>
 </html>
