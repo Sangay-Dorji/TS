@@ -95,7 +95,7 @@
     busy = true;
     try {
       const data = await api({ t: code, action: $('recheck').checked ? 'lookup' : 'check' });
-      if (data.result === 'valid') show('ok', 'VALID', data.note || (data.marked ? 'Checked in' : 'Not used yet'), 1300);
+      if (data.result === 'valid') show('ok', 'VALID', data.note || (data.marked ? 'Checked in' : 'Not used yet'), 700);
       else if (data.result === 'used') show('bad', 'ALREADY USED', 'First scan: ' + (data.time || 'unknown'));
       else if (data.result === 'invalid') show('bad', 'INVALID', 'Not in the ticket list');
       else if (data.result === 'unauthorized') { show('bad', 'WRONG PIN', 'Reload the page and try again'); }
@@ -103,7 +103,6 @@
     } catch (err) {
       show('warn', 'NO CONNECTION', 'Check signal, then tap and rescan');
     }
-    refreshCount();
   }
 
   async function refreshCount() {
@@ -125,14 +124,18 @@
     if (!pin) return;
     localStorage.setItem('pin', pin);
     $('login').hidden = true; $('app').hidden = false;
-    scanner = new Html5Qrcode('reader');
+    scanner = new Html5Qrcode('reader', {
+    formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+    experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+    });
     try {
-      await scanner.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 240, height: 240 } }, onScan, () => {});
+      await scanner.start({ facingMode: 'environment' }, { fps: 15, qrbox: { width: 240, height: 240 } }, onScan, () => {});
     } catch (e) {
       $('reader').textContent = 'Camera unavailable. Allow camera access, or type codes below.';
       $('reader').style.color = '#fff'; $('reader').style.padding = '16px';
     }
     refreshCount();
+    setInterval(refreshCount, 30000);
   }
 
   $('go').addEventListener('click', start);
