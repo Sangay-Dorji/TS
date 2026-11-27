@@ -1,113 +1,86 @@
-// ====== SETTINGS ======
-const STAFF_PIN = '2027';   // <-- change me
-const SHEET_NAME = 'TMS DB';
-const TICKET_COUNT = 2000;
-// Columns: A TicketID | B Note | C Status | D CheckedInAt | E QR image
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Book tickets</title>
+<style>
+  :root { --bg:#f3f4f6; --fg:#14171c; --card:#fff; --line:#d5d9e0; --ok:#12805c; --bad:#b3261e; --accent:#1d4ed8; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#12151a; --fg:#f1f3f6; --card:#1c2027; --line:#333a45; --accent:#7aa2ff; } }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,"Segoe UI",sans-serif; background:var(--bg); color:var(--fg); }
+  main { max-width:520px; margin:0 auto; padding:20px 14px 40px; }
+  h1 { font-size:26px; margin:6px 0 4px; }
+  p.sub { margin:0 0 16px; opacity:.75; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:14px; }
+  label { display:block; font-size:14px; font-weight:600; margin:12px 0 5px; }
+  input, select { width:100%; font-size:16px; padding:11px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg); }
+  .total { font-size:22px; font-weight:700; margin-top:14px; }
+  button { width:100%; margin-top:16px; font-size:17px; padding:13px; border:0; border-radius:8px; background:var(--accent); color:var(--bg); font-weight:700; }
+  button:disabled { opacity:.5; }
+  .pay { border-left:4px solid var(--accent); }
+  .pay h2 { font-size:16px; margin:0 0 6px; }
+  #msg { display:none; padding:14px; border-radius:8px; margin-top:14px; font-weight:600; }
+  #msg.ok { display:block; background:var(--ok); color:#fff; } #msg.bad { display:block; background:var(--bad); color:#fff; }
+  .hp { position:absolute; left:-9999px; }
+  .amount { font-size:20px; font-weight:700; margin-top:10px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Book your tickets</h1>
+  <p class="sub">Event name · date · venue</p>
 
-// ====== ONE-TIME SETUP (run from the editor) ======
-function setup() {
-  const ss = SpreadsheetApp.getActive();
-  let sheet = ss.getSheetByName(SHEET_NAME) || ss.insertSheet(SHEET_NAME);
-  sheet.clear();
-  sheet.getRange(1, 1, 1, 5).setValues([['TicketID', 'Note', 'Status', 'CheckedInAt', 'QR']]);
+  <div class="card pay">
+    <h2>How to pay</h2>
+    <!-- EDIT: replace with your real payment details -->
+    <div>1. Pay <b>exactly the amount shown</b> using your banking app.<br>
+    2. Copy the <b>transaction / journal number</b> from your payment confirmation.<br>
+    3. Fill in the form below with that number.<br>
+    Your tickets are emailed after we verify the payment.</div>
+    <div class="amount">Amount to pay: <span id="payTotal"></span></div>
+  </div>
 
-  // No 0/O/1/I so codes are easy to type from a printed ticket
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  const used = {};
-  const rows = [];
-  while (rows.length < TICKET_COUNT) {
-    const id = makeId();
-    if (used[id]) continue;
-    used[id] = true;
-    rows.push([id, '', 'UNUSED', '']);
-  }
-  sheet.getRange(2, 1, rows.length, 4).setValues(rows);
-  sheet.setFrozenRows(1);
-  CacheService.getScriptCache().remove('idmap');
-  SpreadsheetApp.flush();
-}
+  <form class="card" id="f" autocomplete="on">
+    <label for="name">Full name</label><input id="name" required>
+    <label for="email">Email (tickets are sent here)</label><input id="email" type="email" required>
+    <label for="phone">Phone</label><input id="phone" type="tel">
+    <label for="qty">Number of tickets</label><select id="qty"></select>
+    <div class="total">Total: <span id="total"></span></div>
+    <label for="ref">Payment transaction / journal number</label><input id="ref" required>
+    <input class="hp" id="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+    <button id="btn" type="submit">Submit booking</button>
+    <div id="msg"></div>
+  </form>
+</main>
 
-// Run after setup(). Adds a QR picture next to each ID (QR contains ONLY the ticket ID).
-function addQrCodes() {
-  const sheet = SpreadsheetApp.getActive().getSheetByName(SHEET_NAME);
-  const n = sheet.getLastRow() - 1;
-  const formulas = [];
-  for (let r = 2; r < n + 2; r++) {
-    formulas.push(['=IMAGE("https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=10&data="&A' + r + ')']);
-  }
-  sheet.getRange(2, 5, n, 1).setFormulas(formulas);
-  sheet.setColumnWidth(5, 120);
-  sheet.setRowHeights(2, n, 120);
-}
+<script>
+  // >>> EDIT THESE THREE LINES <<<
+  const API_URL = 'https://script.google.com/macros/s/AKfycbwMwad85YYJgx0Z9EdqksojyUnmuIyOkBGH12UvyPNNOcUf3Ivklbf0io1POojRvYYGxA/exec';
+  const PRICE = 800, CURRENCY = 'Nu.';
+  const MAX = 10;
 
-// TESTING ONLY: marks every ticket UNUSED again. Run before the event, never during it.
-function resetAllTickets() {
-  const sheet = SpreadsheetApp.getActive().getSheetByName(SHEET_NAME);
-  const n = sheet.getLastRow() - 1;
-  const blank = [];
-  for (let i = 0; i < n; i++) blank.push(['UNUSED', '']);
-  sheet.getRange(2, 3, n, 2).setValues(blank);
-}
+  const $ = id => document.getElementById(id);
+  for (let i = 1; i <= MAX; i++) $('qty').add(new Option(i, i));
+  const upd = () => { const t = CURRENCY + ' ' + (PRICE * $('qty').value).toLocaleString(); $('total').textContent = t; $('payTotal').textContent = t; };
+  $('qty').addEventListener('change', upd); upd();
 
-// ====== WEB APP ======
-function doGet(e) {
-  const p = e.parameter || {};
-  if (p.action === 'book') return json(handleBooking(p));
-  if (p.action === 'stats') return json(stats());
-  if (p.action === 'list') return json(listTickets());
-  const id = (p.t || '').trim().toUpperCase();
-  if (!id) return json({ result: 'invalid' });
+  function say(kind, text) { $('msg').className = kind; $('msg').textContent = text; }
 
-  const markUsed = p.action !== 'lookup';   // action=lookup checks without using the ticket
-  const lock = LockService.getScriptLock();
-  lock.waitLock(15000);
-  try {
-    const sheet = SpreadsheetApp.getActive().getSheetByName(SHEET_NAME);
-    let row = getMap(false)[id];
-    if (!row) row = getMap(true)[id];            // refresh once in case tickets were added
-    if (!row) return json({ result: 'invalid' });
-
-    const cells = sheet.getRange(row, 2, 1, 3).getValues()[0]; // Note, Status, CheckedInAt
-    const note = cells[0], status = cells[1], when = cells[2];
-
-    if (status === 'USED') return json({ result: 'used', time: String(when), note: note });
-    if (markUsed) {
-      const now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd MMM HH:mm:ss');
-      sheet.getRange(row, 3, 1, 2).setValues([['USED', now]]);
-    }
-    return json({ result: 'valid', note: note, marked: markUsed });
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-// ====== HELPERS ======
-function getMap(forceRefresh) {
-  const cache = CacheService.getScriptCache();
-  if (!forceRefresh) {
-    const hit = cache.get('idmap');
-    if (hit) return JSON.parse(hit);
-  }
-  const sheet = SpreadsheetApp.getActive().getSheetByName(SHEET_NAME);
-  const ids = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues();
-  const map = {};
-  ids.forEach((r, i) => { map[String(r[0]).toUpperCase()] = i + 2; });
-  try { cache.put('idmap', JSON.stringify(map), 21600); } catch (e) {}  return map;
-}
-
-function stats() {
-  const cache = CacheService.getScriptCache();
-  const hit = cache.get('stats');
-  if (hit) return JSON.parse(hit);
-  const sheet = SpreadsheetApp.getActive().getSheetByName(SHEET_NAME);
-  const status = sheet.getRange(2, 3, sheet.getLastRow() - 1, 1).getValues().flat();
-  const out = { result: 'stats', used: status.filter(s => s === 'USED').length, total: status.length };
-  cache.put('stats', JSON.stringify(out), 15);
-  return out;
-}
-
-
-function json(obj) {
-  return ContentService.createTextOutput(JSON.stringify(obj))
-    .setMimeType(ContentService.MimeType.JSON);
-}
+  $('f').addEventListener('submit', async e => {
+    e.preventDefault();
+    $('btn').disabled = true; say('', '');
+    try {
+      const q = new URLSearchParams({ action: 'book', name: $('name').value, email: $('email').value, phone: $('phone').value,
+        qty: $('qty').value, ref: $('ref').value, website: $('website').value });
+      const d = await (await fetch(API_URL + '?' + q)).json();
+      if (d.result === 'ok') { $('f').reset(); upd(); say('ok', 'Booking received' + (d.orderId ? ' (order ' + d.orderId + ')' : '') + '. Your tickets will be emailed once we confirm your payment. Check your spam folder too.'); }
+      else if (d.result === 'duplicate') say('bad', 'That payment number was already used for a booking.');
+      else if (d.result === 'soldout') say('bad', 'Sorry, not enough online tickets left.');
+      else say('bad', 'Please check your details and try again.');
+    } catch (err) { say('bad', 'Connection problem. Please try again.'); }
+    $('btn').disabled = false;
+  });
+</script>
+</body>
+</html>
